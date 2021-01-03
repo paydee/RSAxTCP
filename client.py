@@ -1,10 +1,12 @@
 import socket
-from deeRSA import gen_rsa_para, encrypt, decrypt
+from utils import byte_size
+from deeRSA import gen_key, encrypt, decrypt
 
 # generate RSA primitives
 e = 65537
 LENGTH = 512
-n, d = gen_rsa_para(LENGTH)
+n, d = gen_key(LENGTH)
+bit_order = 'big'
 
 # connection's constants
 HEADER = 64
@@ -35,32 +37,27 @@ def send(msg):
 
 
 def exchange_key():
-    server_n = client.recv(1024).decode(FORMAT)
-    server_d = client.recv(1024).decode(FORMAT)
-    server_n = int(server_n, 10)
-    server_d = int(server_d, 10)
+    server_n = client.recv(2048)
+    server_d = client.recv(2048)
+    print("sending......")
+    server_n = int.from_bytes(server_n, bit_order, signed=False)
+    server_d = int.from_bytes(server_d, bit_order, signed=False)
     print(f"server n received {server_n}")
     print(f"server d received {server_d}")
-    n_send = str(n) + "\n"
-    d_send = str(d) + "\n"
-    client.send(bytes(n_send, FORMAT))
-    client.send(bytes(d_send, FORMAT))
+    client.send(n.to_bytes(byte_size(n), bit_order))
+    client.send(d.to_bytes(byte_size(d), bit_order))
     print(f"send n {n}")
     print(f"send d {d}")
     return server_n, server_d
 
 
 def chat(server_n, server_d):
-    out_mess = input("Enter mess: ")
-    out_mess = encrypt(out_mess, n, e)
+    out_mess = input("Me> ")
+    out_mess = encrypt(bytes(out_mess, FORMAT), n, e)
     client.send(bytes(out_mess, FORMAT))
     in_mess = client.recv(1024).decode(FORMAT)
-    in_mess = decrypt(in_mess, server_n, server_d)
-    print(f"Received message {in_mess} from server")
-
-
-
-
+    in_mess = decrypt(in_mess, server_n, server_d).decode(FORMAT)
+    print(f"Other> {in_mess}")
 
 
 connected = True

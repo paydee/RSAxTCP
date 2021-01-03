@@ -1,6 +1,8 @@
 from random import getrandbits, seed
 from subprocess import run, PIPE
 import re
+import os
+from utils import byte_size, ceil_div
 from math import log
 
 E = 65537
@@ -11,7 +13,6 @@ def gen_candidate(length):
     seed()
     p = getrandbits(length)
     p |= (1 << length - 1) | 1
-    print(int(log(p, 256) + 1))
     return p
 
 
@@ -59,7 +60,7 @@ def powmod(x, y, n):
     return result
 
 
-def gen_rsa_para(length):
+def gen_key(length):
     p = gen_prime(length // 2)
     q = gen_prime(length // 2)
     while p == q:
@@ -72,52 +73,67 @@ def gen_rsa_para(length):
 
 # TODO: format mess OS2IP IP2OS
 # OS2IP converts an octet string to a nonnegative integer RFC 3447
-def string_to_int(mess):
-    b_mess = bytes(mess, FORMAT)
-    len_mess = len(b_mess)
-    b_mess = b_mess[::-1]  # reverse mess
-    c_mess = 0
-    for i in range(len_mess):
-        c_mess += b_mess[i] * 256 ** i
-    return c_mess
+def bytes_to_int(mess):
+    return int.from_bytes(mess, 'big', signed=False)
 
 
 # converts a nonnegative integer to an octet string of a specified length I2OSP / RFC 3447
-def int_to_string(cipher, mlen):
-    if cipher >= 256 ** mlen:
-        raise ValueError("integer too large")
-    digits = []
-
-    while cipher:
-        digits.append(int(cipher % 256))
-        cipher //= 256
-    for i in range(mlen - len(digits)):
-        digits.append(0)
-    mess = bytes(digits[::-1]).decode(FORMAT)
-    return mess
+def int_to_bytes(cipher, target_len):
+    needlen = max(1, cipher.bit_length() // 8)
+    if target_len > 0:
+        return cipher.to_bytes(target_len, 'big')
+    return cipher.to_bytes(needlen, 'big')
 
 
 # PKCS1-v1_5 padding scheme
-# def pad_for_encryption(mess, target_len):
+def pad_for_encryption(mess, target_len):
+    maxlen = target_len - 11
+    messlen = len(mess)
+    if messlen > maxlen:
+        raise OverflowError("Message too large!")
+    padlen = target_len - messlen - 3
+    padding = b''
+    while len(padding) < padlen:
+        needlen = padlen - len(padding)
+        new_padding = os.urandom(needlen + 5)
+        new_padding = new_padding.replace(b'\x00', b'')
+        padding = padding + new_padding[:needlen]
+    return b''.join([b'\x00\x02',
+                     padding,
+                     b'\x00',
+                     mess])
 
 
 def encrypt(mess, n, e):
-    m_int = string_to_int(mess)
-    c_int = powmod(mess, e, n)
-    return int_to_string(c_int, len(mess))
+    keylen = byte_size(n)
+    pad_for_encryption(mess, keylen)
+    m_int = bytes_to_int(mess)
+    c_int = powmod(m_int, e, n)
+    return int_to_bytes(c_int, keylen)
 
 
-def decrypt(mess, n, d):
-    m_int = string_to_int(mess)
-    c_int = powmod(mess, d, n)
-    return int_to_string(c_int, len(mess))
+def decrypt(cipher, n, d):
+    keylen = byte_size(n)
+    i_cipher = bytes_to_int(cipher)
+    c_int = powmod(i_cipher, d, n)
+    clear_mess = int_to_bytes(c_int, keylen)
+    if len(cipher) > keylen:
+        raise ValueError("Decryption failed")
+    sep_idx = clear_mess.find(b'\x00', 2)
+    return clear_mess[sep_idx + 1:]
 
 
 if __name__ == '__main__':
     # s, t = gen_prime(1024)
-    n, d = gen_rsa_para(1024)
-    print(n)
-    print(int(log(n, 256)) + 1)
+    # n, d = gen_rsa_para(1024)
+    # mess = b'ggggggggg'
+    # c = encrypt(mess, n, E)
+    # m = decrypt(c, n, d)
+    # print(m.decode(FORMAT))
+    x = 100999
+    t = x.to_bytes(byte_size(x), 'big')
+    print(t)
+
 
     # mess = "hello dkhfkhsdof skfsdkh sdkhlf"
     # c = string_to_int(mess)

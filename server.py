@@ -1,12 +1,14 @@
 import socket
 import sys
 import threading
-from deeRSA import gen_rsa_para, encrypt, decrypt
+from deeRSA import gen_key, encrypt, decrypt
+from utils import byte_size
 
 # generate RSA primitives
 e = 65537
 length = 512
-n, d = gen_rsa_para(length)
+n, d = gen_key(length)
+bit_order = 'big'
 
 # connection's constants
 BUFFER = 1024
@@ -21,9 +23,6 @@ DISCONNECT_MESS = "DISCONNECT!"
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
-
-
-
 
 
 # handle client behavior
@@ -51,31 +50,33 @@ def start():
     while True:
         print(sys.stderr, 'waiting for a connection')
         clientsocket, addr = server.accept()
+        # exchange_key(clientsocket)
         client_n, client_d = exchange_key(clientsocket)
+        # chat(clientsocket, client_n, client_d)
         # TODO: input length of key
 
 
 # TODO: exchange RSA primitives
 def exchange_key(client):
-    n_send = str(n) + '\n'
-    d_send = str(d) + '\n'
-    client.send(bytes(n_send, FORMAT))
-    client.send(bytes(d_send, FORMAT))
-    client_n = client.recv(1024).decode(FORMAT)
-    client_d = client.recv(1024).decode(FORMAT)
-    client_n = int(client_n, 10)
-    client_d = int(client_d, 10)
+    client.send(n.to_bytes(byte_size(n), bit_order))
+    client.send(d.to_bytes(byte_size(d), bit_order))
+    client_n = client.recv(1024)
+    client_d = client.recv(1024)
+    client_n = int.from_bytes(client_n, bit_order, signed=False)
+    client_d = int.from_bytes(client_d, bit_order, signed=False)
     print(f"n {n}\n d {d}\n client_n {client_n} \n client_d {client_d} \n")
     return client_n, client_d
 
+
 # TODO: chat with RSA encrypted mess
 def chat(client, client_n, client_d):
-    in_mess = client.recv().decode(FORMAT)
+    in_mess = client.recv(1024).decode(FORMAT)
     in_mess = decrypt(in_mess, client_n, client_d)
-    print(f"Client> {in_mess} from client")
+    print(f"Other> {in_mess}")
     out_mess = input("Me> ")
-    out_mess = encrypt(out_mess, n, e)
-    client.send(bytes(out_mess, FORMAT))
+    out_mess = encrypt(bytes(out_mess, FORMAT), n, e)
+    client.send(out_mess)
+
 
 # def chat(clientsocket):
 #     while True:
