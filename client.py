@@ -1,3 +1,4 @@
+import json
 import socket
 from utils import byte_size
 from deeRSA import gen_key, encrypt, decrypt
@@ -37,15 +38,17 @@ def send(msg):
 
 
 def exchange_key():
-    server_n = client.recv(2048)
-    server_d = client.recv(2048)
+    info = json.loads(client.recv(2048).decode(FORMAT))
     print("sending......")
-    server_n = int.from_bytes(server_n, bit_order, signed=False)
-    server_d = int.from_bytes(server_d, bit_order, signed=False)
+    server_n = info.get("client_n")
+    server_d = info.get("client_d")
     print(f"server n received {server_n}")
     print(f"server d received {server_d}")
-    client.send(n.to_bytes(byte_size(n), bit_order))
-    client.send(d.to_bytes(byte_size(d), bit_order))
+    client_info = {
+        "client_n": n,
+        "client_d": d
+    }
+    client.send(json.dumps(client_info).encode(FORMAT))
     print(f"send n {n}")
     print(f"send d {d}")
     return server_n, server_d
@@ -64,7 +67,7 @@ connected = True
 
 while connected:
     server_n, server_d = exchange_key()
-    # chat(server_n, server_d)
+    chat(server_n, server_d)
     # send(mess)
     # if mess == DISCONNECT_MESS:
     #     break

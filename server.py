@@ -1,3 +1,4 @@
+import json
 import socket
 import sys
 import threading
@@ -58,12 +59,14 @@ def start():
 
 # TODO: exchange RSA primitives
 def exchange_key(client):
-    client.send(n.to_bytes(byte_size(n), bit_order))
-    client.send(d.to_bytes(byte_size(d), bit_order))
-    client_n = client.recv(1024)
-    client_d = client.recv(1024)
-    client_n = int.from_bytes(client_n, bit_order, signed=False)
-    client_d = int.from_bytes(client_d, bit_order, signed=False)
+    info = {
+        "client_n": n,
+        "client_d": d,
+    }
+    client.send(json.dumps(info).encode(FORMAT))
+    client_info = json.loads(client.recv(1024).decode(FORMAT))
+    client_n = client_info.get("client_n")
+    client_d = client_info.get("client_d")
     print(f"n {n}\n d {d}\n client_n {client_n} \n client_d {client_d} \n")
     return client_n, client_d
 
